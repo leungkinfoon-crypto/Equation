@@ -24,15 +24,6 @@
         .fraction > span { display: block; padding: 0.1em; }
         .fraction span.fdn { border-top: 2px solid var(--neon-green); }
         #admin-btn { position: fixed; bottom: 10px; right: 10px; opacity: 0.3; color: white; background: none; border: none; cursor: pointer; }
-<body>
-    <h1>網絡防禦者</h1>
-    
-    <button onclick="startGame()">開始任務</button>
-    
-    <button onclick="showLeaderboard()" style="background-color: #f39c12;">🏆 查看排行榜</button>
-
-    <div id="leaderboard-modal" style="display:none; ...">
-        </div>
         
         /* Admin Panel 特殊樣式 */
         .admin-nav { display: flex; border-bottom: 2px solid var(--neon-blue); margin-bottom: 20px; }
@@ -61,7 +52,9 @@
         </select><br>
         <select id="player-num-1" class="custom-select"><option value="">-- 學號 1 --</option></select><br>
         <select id="player-num-2" class="custom-select"><option value="">-- 學號 2 (二人小組選填) --</option></select><br>
+        
         <button onclick="startGame()">啟動防禦程式</button>
+        <button onclick="showLeaderboard()" style="background-color: #2980b9; color: white;">🏆 查看排行榜</button>
     </div>
 
     <div id="screen-game" class="container">
@@ -86,7 +79,7 @@
             <thead><tr><th>排名</th><th>特工</th><th>分數</th><th>總用時</th></tr></thead>
             <tbody></tbody>
         </table>
-        <button onclick="location.reload()" style="margin-top: 20px;">重新啟動</button>
+        <button onclick="location.reload()" style="margin-top: 20px;">返回首頁</button>
     </div>
 
     <div id="screen-admin" class="container" style="max-width: 900px;">
@@ -101,7 +94,6 @@
         <div id="admin-data" style="display:none; margin-top: 20px;">
             <div style="margin-bottom: 20px; text-align: right;">
                 <button onclick="switchScreen('screen-welcome')" style="font-size: 14px; padding: 5px 10px;">🏠 返回首頁</button>
-                <button onclick="clearAllData()" style="border-color: var(--alert-red); color: var(--alert-red); font-size: 14px; padding: 5px 10px;">⚠️ 清空學生數據</button>
             </div>
             
             <div class="admin-nav">
@@ -110,18 +102,35 @@
             </div>
 
             <div id="tab-exp" style="display: block;"></div>
-
             <div id="tab-results" style="display: none;"></div>
         </div>
     </div>
 
     <button id="admin-btn" onclick="showAdmin()">[後台]</button>
 
+    <div id="leaderboard-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:999; color:white; overflow-y:auto;">
+        <div style="width:90%; max-width:500px; margin:50px auto; background:#111; padding:20px; border:2px solid #2980b9; border-radius:10px; position:relative;">
+            <span onclick="closeLeaderboard()" style="position:absolute; top:10px; right:20px; cursor:pointer; font-size:30px; color: #aaa;">&times;</span>
+            <h2 style="text-align:center; color: yellow;">🏆 全球特工排行榜 🏆</h2>
+            <table style="width:100%; border-collapse: collapse; text-align:left; margin-top: 15px;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #2980b9;">
+                        <th style="padding:10px; color: #2980b9;">排名</th>
+                        <th style="color: #2980b9;">特工代號</th>
+                        <th style="color: #2980b9;">分數</th>
+                        <th style="color: #2980b9;">用時</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboard-body">
+                    </tbody>
+            </table>
+            <div id="loading-text" style="text-align:center; margin-top:20px; color: var(--neon-green);">📡 正在連接基地數據庫...</div>
+        </div>
+    </div>
+
   <script>
-    // ⚠️ 貼上你剛剛在 Apps Script 複製的網頁應用程式網址
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw5erUUVqROD5isC91ESG10lvPGAGBBKBm3ZMFijoJnVwzT4ndrGdR2lwWPpzr8qJYQ/exec";
 
-    // --- 題庫設定 (與之前相同，100分一題) ---
     const questions = [
         { 
             title: "第一關：概念防禦 (1/3)", 
@@ -225,7 +234,6 @@
         nextQuestion();
     }
 
-    // --- 修改 endGame 函數 (上傳至 Google Sheet) ---
     async function endGame() {
         switchScreen('screen-end');
         document.getElementById("final-score").innerText = score;
@@ -244,14 +252,11 @@
         };
 
         try {
-            // POST 數據到 Google Sheet
             await fetch(WEB_APP_URL, {
                 method: "POST",
-                // 使用 text/plain 避免 CORS (跨來源資源共用) 問題
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(uploadData)
             });
-            // 上傳成功後，立刻獲取最新排行榜
             fetchLeaderboard();
         } catch (error) {
             console.error("上傳失敗", error);
@@ -259,168 +264,11 @@
         }
     }
 
-    // --- 從 Google Sheet 獲取排行榜 ---
     async function fetchLeaderboard() {
         try {
             const response = await fetch(WEB_APP_URL);
             const data = await response.json();
-            
-            // 渲染前 10 名
             document.querySelector("#leaderboard tbody").innerHTML = data.slice(0, 10).map((r, i) => 
                 `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.score}</td><td>${r.time}s</td></tr>`
             ).join('');
-        } catch (error) {
-            console.error("獲取排行榜失敗", error);
-        }
-    }
-
-    // --- Admin 功能 ---
-    function showAdmin() {
-        switchScreen('screen-admin');
-        document.getElementById("admin-login").style.display = "block";
-        document.getElementById("admin-data").style.display = "none";
-        document.getElementById("admin-pwd").value = "";
-    }
-
-    async function checkAdmin() {
-        if(document.getElementById("admin-pwd").value === "steam2026") {
-            document.getElementById("admin-login").style.display = "none";
-            document.getElementById("admin-data").style.display = "block";
-            
-            renderAdminExplanations();
-            
-            // 載入時顯示 Loading
-            document.getElementById("tab-results").innerHTML = "<h3 style='color:yellow;'>正在從 Google 雲端數據庫下載全班成績...</h3>";
-            document.getElementById("tab-results").style.display = 'block'; // 預設顯示成績頁
-
-            try {
-                const response = await fetch(WEB_APP_URL);
-                const cloudData = await response.json();
-                renderAdminResults(cloudData); // 渲染雲端數據
-            } catch (error) {
-                document.getElementById("tab-results").innerHTML = "<h3 style='color:red;'>讀取雲端數據庫失敗。請檢查網址設定。</h3>";
-            }
-            
-        } else { alert("保安密碼錯誤！"); }
-    }
-
-    function switchAdminTab(tab) {
-        document.getElementById('tab-btn-exp').classList.remove('active-tab');
-        document.getElementById('tab-btn-results').classList.remove('active-tab');
-        document.getElementById(`tab-btn-${tab}`).classList.add('active-tab');
-        
-        document.getElementById('tab-exp').style.display = tab === 'exp' ? 'block' : 'none';
-        document.getElementById('tab-results').style.display = tab === 'results' ? 'block' : 'none';
-    }
-
-    function renderAdminExplanations() {
-        const container = document.getElementById("tab-exp");
-        container.innerHTML = questions.map(q => `
-            <div class="q-card">
-                <div class="q-card-top">
-                    <b style="color: var(--neon-blue); font-size: 1.2em;">${q.title}</b>
-                    <div class="q-card-html">${q.html}</div>
-                    <b style="color: yellow;">💡 逐步解釋：</b>
-                    <div class="q-card-exp">${q.exp}</div>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    function renderAdminResults(data) {
-        const container = document.getElementById("tab-results");
-        if(!data || data.length === 0) { 
-            container.innerHTML = "<p>目前數據庫沒有任何特工的行動數據。</p>"; 
-            return; 
-        }
-
-        // 1. 計算題目答對率
-        let stats = {};
-        questions.forEach(q => { stats[q.title] = { correct: 0, total: 0 }; });
-        
-        data.forEach(record => {
-            record.details.forEach(d => {
-                if(stats[d.qTitle]) {
-                    stats[d.qTitle].total++;
-                    if(d.isCorrect) stats[d.qTitle].correct++;
-                }
-            });
-        });
-
-        let htmlContent = `
-            <h3 style="color: var(--neon-blue);">📈 全班題目答對率</h3>
-            <table class="rate-table" style="margin-bottom: 30px;">
-                <thead><tr><th style="text-align:left;">關卡</th><th>答對次數</th><th>總作答次數</th><th>答對率</th></tr></thead>
-                <tbody>
-                    ${Object.keys(stats).map(title => {
-                        let s = stats[title];
-                        let rate = s.total > 0 ? Math.round((s.correct / s.total) * 100) : 0;
-                        let rateColor = rate >= 60 ? "var(--neon-green)" : "var(--alert-red)";
-                        return `
-                            <tr>
-                                <td style="text-align:left;">${title}</td>
-                                <td>${s.correct}</td>
-                                <td>${s.total}</td>
-                                <td style="color: ${rateColor}; font-weight:bold;">${rate}%</td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
-            <hr style="border: 1px solid #333; margin-bottom: 30px;">
-        `;
-
-        // 2. 排行榜簡表 (資料從後端來已經是排序好的)
-        htmlContent += `
-            <h3 style="color: yellow;">🏆 全體學生成績總覽</h3>
-            <table style="margin-bottom: 30px;">
-                <thead><tr><th>排名</th><th>特工</th><th>分數</th><th>總用時</th></tr></thead>
-                <tbody>
-                    ${data.map((r, i) => `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.score}</td><td>${r.time}s</td></tr>`).join('')}
-                </tbody>
-            </table>
-            <hr style="border: 1px solid #333; margin-bottom: 30px;">
-            <h3 style="color: var(--neon-blue);">📋 個別學生答題紀錄 (最新完成排在最前)</h3>
-        `;
-
-        // 3. 個別學生答題紀錄表 (按時間倒序顯示)
-        let reversedData = [...data].sort((a,b) => new Date(b.date) - new Date(a.date));
-        
-        htmlContent += reversedData.map(record => `
-            <div class="admin-record">
-                <h3 style="color:white; margin-top:0;">${record.name} <span style="font-size:0.8em; color:var(--neon-green);">[分數: ${record.score} | 用時: ${record.time}s]</span></h3>
-                <div style="font-size:0.8em; color:#888; margin-bottom:10px;">完成時間：${record.date}</div>
-                
-                <table class="ans-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 40%;">關卡</th>
-                            <th>學生回答</th>
-                            <th>正確答案</th>
-                            <th>結果</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${record.details.map(d => `
-                            <tr>
-                                <td>${d.qTitle}</td>
-                                <td style="color: ${d.isCorrect ? 'white' : 'var(--alert-red)'};">${d.userAns}</td>
-                                <td>${d.correctAns}</td>
-                                <td>${d.isCorrect ? '<span class="correct-tag">✔ 對</span>' : '<span class="wrong-tag">✘ 錯</span>'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `).join('');
-
-        container.innerHTML = htmlContent;
-    }
-
-    function switchScreen(id) {
-        document.querySelectorAll('.container').forEach(c => c.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-    }
-</script>
-</body>
-</html>
+        } catch (
