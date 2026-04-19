@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>網絡防禦者：限時解密 (教師管理版)</title>
+    <style>
+        :root { --neon-green: #0f0; --dark-bg: #050505; --panel-bg: #111; --alert-red: #f00; --neon-blue: #0ff; }
+        body { background-color: var(--dark-bg); color: var(--neon-green); font-family: 'Courier New', monospace; text-align: center; margin: 0; padding: 10px; }
+        .container { max-width: 800px; margin: 0 auto; background: var(--panel-bg); padding: 20px; border: 2px solid var(--neon-green); border-radius: 10px; box-shadow: 0 0 15px var(--neon-green); display: none; }
+        .active { display: block; }
+        button { background: black; color: var(--neon-green); border: 1px solid var(--neon-green); padding: 10px 20px; font-size: 18px; cursor: pointer; margin: 10px; border-radius: 5px; transition: 0.2s; }
+        button:hover { background: var(--neon-green); color: black; }
+        input { background: black; color: var(--neon-green); border: 1px solid var(--neon-green); padding: 10px; font-size: 18px; text-align: center; }
+        select.custom-select { background: black; color: var(--neon-green); border: 1px solid var(--neon-green); padding: 10px; font-size: 18px; margin: 10px 0; width: 80%; }
+        .stats { display: flex; justify-content: space-between; font-size: 1.1em; border-bottom: 1px solid var(--neon-green); padding-bottom: 10px; margin-bottom: 20px; }
+        .timer-display { font-size: 1.5em; font-weight: bold; color: var(--neon-blue); }
+        .timer-red { color: var(--alert-red); animation: blink 0.5s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.85em; background: #000; }
+        th, td { border: 1px solid var(--neon-green); padding: 10px; text-align: left; }
+        th { background: #111; color: var(--neon-blue); text-align: center; }
+        .fraction { display: inline-block; vertical-align: middle; text-align: center; font-size: 1.2em; margin: 0 5px; }
+        .fraction > span { display: block; padding: 0.1em; }
+        .fraction span.fdn { border-top: 2px solid var(--neon-green); }
+        #admin-btn { position: fixed; bottom: 10px; right: 10px; opacity: 0.3; color: white; background: none; border: none; cursor: pointer; }
+        
+        /* Admin Panel 特殊樣式 */
+        .admin-nav { display: flex; border-bottom: 2px solid var(--neon-blue); margin-bottom: 20px; }
+        .admin-nav button { margin: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; border: none; background: #222; color: #888; border-top-left-radius: 5px; border-top-right-radius: 5px; }
+        .admin-nav button.active-tab { background: var(--neon-blue); color: black; font-weight: bold; }
+        .admin-record { border: 2px solid var(--neon-blue); padding: 20px; margin-bottom: 30px; border-radius: 10px; background: #050505; text-align: left; }
+        .q-card { background: #151515; border: 1px solid #444; border-radius: 8px; margin-bottom: 20px; overflow: hidden; text-align: left; }
+        .q-card-top { padding: 15px; border-bottom: 1px dashed #555; }
+        .q-card-html { font-size: 1.1em; margin: 15px 0; background: #000; padding: 15px; border-left: 4px solid var(--neon-blue); border-radius: 4px; }
+        .q-card-exp { color: #ddd; line-height: 1.6; margin-top: 10px; padding: 10px; background: rgba(255, 255, 0, 0.05); border-radius: 4px; }
+        .correct-tag { color: var(--neon-green); font-weight: bold; font-size: 1.1em; }
+        .wrong-tag { color: var(--alert-red); font-weight: bold; font-size: 1.1em; }
+        .ans-table td { text-align: center; vertical-align: middle; }
+        .ans-table td:nth-child(1) { text-align: left; }
+        .rate-table td { text-align: center; font-size: 1.1em; }
+    </style>
+</head>
+<body>
+
+    <div id="screen-welcome" class="container active">
+        <h1>⚙️ 網絡防禦者：限時解密 ⚙️</h1>
+        <p>精英工程師，請登入系統：</p>
+        <select id="player-class" class="custom-select">
+            <option value="">-- 選擇班別 --</option>
+            <option>6A</option><option>6B</option><option>6C</option><option>6D</option><option>6E</option>
+        </select><br>
+        <select id="player-num-1" class="custom-select"><option value="">-- 學號 1 --</option></select><br>
+        <select id="player-num-2" class="custom-select"><option value="">-- 學號 2 (二人小組選填) --</option></select><br>
+        <button onclick="startGame()">啟動防禦程式</button>
+    </div>
+
+    <div id="screen-game" class="container">
+        <div class="stats">
+            <div id="display-name" style="font-size: 0.8em; max-width: 40%; text-align: left;">特工: </div>
+            <div class="timer-display">時間: <span id="timer">--</span>s</div>
+            <div>進度: <span id="progress"></span></div>
+        </div>
+        <h2 id="level-title" style="color: var(--neon-blue);"></h2>
+        <div id="question-text" style="font-size: 1.3em; margin: 30px 0; min-height: 100px;"></div>
+        <div id="input-area" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;"></div>
+    </div>
+
+    <div id="screen-end" class="container">
+        <h1>任務結束</h1>
+        <h2 id="end-status"></h2>
+        <p>你的總得分：<span id="final-score" style="font-size: 1.5em; font-weight: bold;"></span></p>
+        <p>總用時：<span id="total-time"></span> 秒</p>
+        
+        <h3 style="margin-top: 30px; color: yellow;">🏆 菁英龍虎榜 (首 10 名)</h3>
+        <table id="leaderboard">
+            <thead><tr><th>排名</th><th>特工</th><th>分數</th><th>總用時</th></tr></thead>
+            <tbody></tbody>
+        </table>
+        <button onclick="location.reload()" style="margin-top: 20px;">重新啟動</button>
+    </div>
+
+    <div id="screen-admin" class="container" style="max-width: 900px;">
+        <h2 style="color: yellow;">👨‍🏫 教師數據分析中心</h2>
+        <div id="admin-login">
+            <p>請輸入保安密碼驗證身分：</p>
+            <input type="password" id="admin-pwd" placeholder="輸入密碼">
+            <button onclick="checkAdmin()">登入</button>
+            <button onclick="switchScreen('screen-welcome')">返回</button>
+        </div>
+        
+        <div id="admin-data" style="display:none; margin-top: 20px;">
+            <div style="margin-bottom: 20px; text-align: right;">
+                <button onclick="switchScreen('screen-welcome')" style="font-size: 14px; padding: 5px 10px;">🏠 返回首頁</button>
+                <button onclick="clearAllData()" style="border-color: var(--alert-red); color: var(--alert-red); font-size: 14px; padding: 5px 10px;">⚠️ 清空學生數據</button>
+            </div>
+            
+            <div class="admin-nav">
+                <button id="tab-btn-exp" class="active-tab" onclick="switchAdminTab('exp')">📖 題目與詳解庫</button>
+                <button id="tab-btn-results" onclick="switchAdminTab('results')">📊 學生成績分析</button>
+            </div>
+
+            <div id="tab-exp" style="display: block;"></div>
+
+            <div id="tab-results" style="display: none;"></div>
+        </div>
+    </div>
+
+    <button id="admin-btn" onclick="showAdmin()">[後台]</button>
+
+  <script>
+    // ⚠️ 貼上你剛剛在 Apps Script 複製的網頁應用程式網址
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz9Xyo1d2TN1FE-Kb0dA2_dXMpOvpSAdee9JW_LMHs2jNAACBTb9-rpJVmIGRaC2MF1/exec";
+
+    // --- 題庫設定 (與之前相同，100分一題) ---
+    const questions = [
+        { 
+            title: "第一關：概念防禦 (1/3)", 
+            html: `解密程式碼：<br><br><div class="fraction"><span>x - 3</span><span class="fdn">4</span></div> = 7<br><br><b>第一步應該先消除哪一個數字？</b>`, 
+            options: ["兩邊 + 3", "兩邊 - 3", "兩邊 × 4", "兩邊 ÷ 4"], 
+            correct: "兩邊 × 4", type: "mc", limit: 10, score: 100,
+            exp: `1. <b>觀察方程</b>：分數線下的「4」是除數，距離未知數 x 最遠。<br>2. <b>辨識整體</b>：分子 (x - 3) 是一個整體，如同被無形的括號保護，必須留到最後處理。<br>3. <b>執行步驟</b>：要消除除以 4 的防禦牆，必須在等號兩邊同時乘以 4，得出 x - 3 = 28。` 
+        },
+        { 
+            title: "第一關：概念防禦 (2/3)", 
+            html: `解密程式碼：<br><br><b>( y + 8 ) × 2 = 30</b><br><br><b>第一步應該先消除哪一個數字？</b>`, 
+            options: ["兩邊 - 8", "兩邊 ÷ 2", "兩邊 × 2", "兩邊 + 8"], 
+            correct: "兩邊 ÷ 2", type: "mc", limit: 10, score: 100,
+            exp: `1. <b>觀察方程</b>：未知數 y 被括號 (y + 8) 保護在核心。<br>2. <b>運算次序</b>：解方程時，必須先處理括號外面的乘數「× 2」，撤掉最外層防禦。<br>3. <b>執行步驟</b>：消除乘以 2 的方法，是在等號兩邊同時除以 2，得出 y + 8 = 15。` 
+        },
+        { 
+            title: "第一關：概念防禦 (3/3)", 
+            html: `解密程式碼：<br><br><b>5m - 12 = 18</b><br><br><b>第一步應該先消除哪一個數字？</b>`, 
+            options: ["兩邊 ÷ 5", "兩邊 + 12", "兩邊 - 12", "兩邊 × 5"], 
+            correct: "兩邊 + 12", type: "mc", limit: 10, score: 100,
+            exp: `1. <b>觀察方程</b>：這是一條標準的兩步方程。<br>2. <b>運算規律</b>：解方程需按照運算逆序，先處理加減（距離較遠的常數項），後處理乘除。<br>3. <b>執行步驟</b>：第一步要消除減法「- 12」，正確做法是在兩邊同時加上 12，得出 5m = 30。` 
+        },
+        { 
+            title: "第二關：數據分流", 
+            html: `雲端 A 儲存了總量的 30%，雲端 B 儲存了總量的 1/4。<br>若 A 比 B 多儲存了 10 GB，總數據量是多少 GB？`, 
+            correct: "200", type: "input", limit: 60, score: 100,
+            exp: `1. <b>列寫關係式</b>：設總數據量為 x。雲端 A = 30%x，雲端 B = 1/4x (即 25%x)。<br>2. <b>建立方程</b>：根據「A 比 B 多 10」，列出方程 30%x - 25%x = 10。<br>3. <b>合併同類項</b>：左方相減得出 5%x = 10。<br>4. <b>解方程</b>：將 5% 化為小數 0.05 或分數 1/20。兩邊同時除以 5% (或乘 20)，求得 x = 200。` 
+        },
+        { 
+            title: "第三關：黑客追蹤", 
+            html: `黑客 A 攻擊了 x 次，黑客 B 的次數是 A 的 1.2 倍。<br>若兩人合共攻擊了 66 次，<b>黑客 B</b> 攻擊了多少次？`, 
+            correct: "36", type: "input", limit: 60, score: 100,
+            exp: `1. <b>建立方程</b>：黑客 A = x，黑客 B = 1.2x。兩人合共 66 次，即 x + 1.2x = 66。<br>2. <b>合併同類項</b>：x 前面隱藏了系數 1，故 1x + 1.2x = 2.2x。得出 2.2x = 66。<br>3. <b>找出 A 的次數</b>：兩邊除以 2.2，得出 x = 30 (這是黑客 A 的次數)。<br>4. <b>計算最終答案</b>：題目要求「黑客 B」的次數，必須代入計算：30 × 1.2 = 36 次。` 
+        }
+    ];
+
+    let currentQ = 0, score = 0, timer, timeLeft, totalTime = 0, playerName = "";
+    let sessionResults = [];
+    let isUploading = false;
+
+    window.onload = () => {
+        const s1 = document.getElementById("player-num-1"), s2 = document.getElementById("player-num-2");
+        for(let i=1; i<=37; i++) {
+            s1.add(new Option(i+"號", i)); s2.add(new Option(i+"號", i));
+        }
+    };
+
+    function startGame() {
+        const cls = document.getElementById("player-class").value, n1 = document.getElementById("player-num-1").value, n2 = document.getElementById("player-num-2").value;
+        if(!cls || !n1) return alert("請選擇班別及學號！");
+        playerName = `${cls} (${n1}${n2 ? ','+n2 : ''})`;
+        score = 0; currentQ = 0; totalTime = 0; sessionResults = [];
+        document.getElementById("display-name").innerText = "特工: " + playerName;
+        switchScreen('screen-game');
+        nextQuestion();
+    }
+
+    function nextQuestion() {
+        if(currentQ >= questions.length) return endGame();
+        const q = questions[currentQ];
+        timeLeft = q.limit;
+        document.getElementById("level-title").innerText = q.title;
+        document.getElementById("question-text").innerHTML = q.html;
+        document.getElementById("progress").innerText = `${currentQ + 1} / ${questions.length}`;
+        const inputArea = document.getElementById("input-area");
+        if (q.type === "mc") {
+            inputArea.innerHTML = q.options.map(opt => `<button onclick="submitAnswer('${opt}')" style="width: 45%;">${opt}</button>`).join('');
+        } else {
+            inputArea.innerHTML = '<input type="number" id="ans" placeholder="輸入數值..."><button onclick="submitAnswer(document.getElementById(\'ans\').value)">傳送</button>';
+        }
+        if(timer) clearInterval(timer);
+        startTimer();
+    }
+
+    function startTimer() {
+        document.getElementById("timer").innerText = timeLeft;
+        document.getElementById("timer").className = "";
+        timer = setInterval(() => {
+            timeLeft--;
+            document.getElementById("timer").innerText = timeLeft;
+            if(timeLeft <= 3) document.getElementById("timer").className = "timer-red";
+            if(timeLeft <= 0) { clearInterval(timer); submitAnswer("超時未作答"); }
+        }, 1000);
+    }
+
+    function submitAnswer(ans) {
+        clearInterval(timer);
+        const q = questions[currentQ];
+        const isCorrect = (ans == q.correct);
+        if(isCorrect) score += q.score;
+        totalTime += (q.limit - (timeLeft < 0 ? 0 : timeLeft));
+
+        sessionResults.push({
+            qTitle: q.title,
+            userAns: ans,
+            correctAns: q.correct,
+            isCorrect: isCorrect
+        });
+
+        currentQ++;
+        nextQuestion();
+    }
+
+    // --- 修改 endGame 函數 (上傳至 Google Sheet) ---
+    async function endGame() {
+        switchScreen('screen-end');
+        document.getElementById("final-score").innerText = score;
+        document.getElementById("total-time").innerText = totalTime;
+        document.getElementById("end-status").innerText = score >= 300 ? "🎉 防禦成功！系統安全！" : "⚠️ 系統受損！請等待指揮官檢討。";
+        document.getElementById("end-status").style.color = score >= 300 ? "var(--neon-green)" : "var(--alert-red)";
+        
+        document.querySelector("#leaderboard tbody").innerHTML = "<tr><td colspan='4' style='text-align:center;'>正在與基地連線，上傳數據及獲取排行榜...</td></tr>";
+
+        const uploadData = {
+            date: new Date().toLocaleString(),
+            name: playerName,
+            score: score,
+            time: totalTime,
+            details: sessionResults
+        };
+
+        try {
+            // POST 數據到 Google Sheet
+            await fetch(WEB_APP_URL, {
+                method: "POST",
+                // 使用 text/plain 避免 CORS (跨來源資源共用) 問題
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(uploadData)
+            });
+            // 上傳成功後，立刻獲取最新排行榜
+            fetchLeaderboard();
+        } catch (error) {
+            console.error("上傳失敗", error);
+            document.querySelector("#leaderboard tbody").innerHTML = "<tr><td colspan='4' style='text-align:center;color:red;'>連線失敗，請截圖給老師。</td></tr>";
+        }
+    }
+
+    // --- 從 Google Sheet 獲取排行榜 ---
+    async function fetchLeaderboard() {
+        try {
+            const response = await fetch(WEB_APP_URL);
+            const data = await response.json();
+            
+            // 渲染前 10 名
+            document.querySelector("#leaderboard tbody").innerHTML = data.slice(0, 10).map((r, i) => 
+                `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.score}</td><td>${r.time}s</td></tr>`
+            ).join('');
+        } catch (error) {
+            console.error("獲取排行榜失敗", error);
+        }
+    }
+
+    // --- Admin 功能 ---
+    function showAdmin() {
+        switchScreen('screen-admin');
+        document.getElementById("admin-login").style.display = "block";
+        document.getElementById("admin-data").style.display = "none";
+        document.getElementById("admin-pwd").value = "";
+    }
+
+    async function checkAdmin() {
+        if(document.getElementById("admin-pwd").value === "steam2026") {
+            document.getElementById("admin-login").style.display = "none";
+            document.getElementById("admin-data").style.display = "block";
+            
+            renderAdminExplanations();
+            
+            // 載入時顯示 Loading
+            document.getElementById("tab-results").innerHTML = "<h3 style='color:yellow;'>正在從 Google 雲端數據庫下載全班成績...</h3>";
+            document.getElementById("tab-results").style.display = 'block'; // 預設顯示成績頁
+
+            try {
+                const response = await fetch(WEB_APP_URL);
+                const cloudData = await response.json();
+                renderAdminResults(cloudData); // 渲染雲端數據
+            } catch (error) {
+                document.getElementById("tab-results").innerHTML = "<h3 style='color:red;'>讀取雲端數據庫失敗。請檢查網址設定。</h3>";
+            }
+            
+        } else { alert("保安密碼錯誤！"); }
+    }
+
+    function switchAdminTab(tab) {
+        document.getElementById('tab-btn-exp').classList.remove('active-tab');
+        document.getElementById('tab-btn-results').classList.remove('active-tab');
+        document.getElementById(`tab-btn-${tab}`).classList.add('active-tab');
+        
+        document.getElementById('tab-exp').style.display = tab === 'exp' ? 'block' : 'none';
+        document.getElementById('tab-results').style.display = tab === 'results' ? 'block' : 'none';
+    }
+
+    function renderAdminExplanations() {
+        const container = document.getElementById("tab-exp");
+        container.innerHTML = questions.map(q => `
+            <div class="q-card">
+                <div class="q-card-top">
+                    <b style="color: var(--neon-blue); font-size: 1.2em;">${q.title}</b>
+                    <div class="q-card-html">${q.html}</div>
+                    <b style="color: yellow;">💡 逐步解釋：</b>
+                    <div class="q-card-exp">${q.exp}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function renderAdminResults(data) {
+        const container = document.getElementById("tab-results");
+        if(!data || data.length === 0) { 
+            container.innerHTML = "<p>目前數據庫沒有任何特工的行動數據。</p>"; 
+            return; 
+        }
+
+        // 1. 計算題目答對率
+        let stats = {};
+        questions.forEach(q => { stats[q.title] = { correct: 0, total: 0 }; });
+        
+        data.forEach(record => {
+            record.details.forEach(d => {
+                if(stats[d.qTitle]) {
+                    stats[d.qTitle].total++;
+                    if(d.isCorrect) stats[d.qTitle].correct++;
+                }
+            });
+        });
+
+        let htmlContent = `
+            <h3 style="color: var(--neon-blue);">📈 全班題目答對率</h3>
+            <table class="rate-table" style="margin-bottom: 30px;">
+                <thead><tr><th style="text-align:left;">關卡</th><th>答對次數</th><th>總作答次數</th><th>答對率</th></tr></thead>
+                <tbody>
+                    ${Object.keys(stats).map(title => {
+                        let s = stats[title];
+                        let rate = s.total > 0 ? Math.round((s.correct / s.total) * 100) : 0;
+                        let rateColor = rate >= 60 ? "var(--neon-green)" : "var(--alert-red)";
+                        return `
+                            <tr>
+                                <td style="text-align:left;">${title}</td>
+                                <td>${s.correct}</td>
+                                <td>${s.total}</td>
+                                <td style="color: ${rateColor}; font-weight:bold;">${rate}%</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+            <hr style="border: 1px solid #333; margin-bottom: 30px;">
+        `;
+
+        // 2. 排行榜簡表 (資料從後端來已經是排序好的)
+        htmlContent += `
+            <h3 style="color: yellow;">🏆 全體學生成績總覽</h3>
+            <table style="margin-bottom: 30px;">
+                <thead><tr><th>排名</th><th>特工</th><th>分數</th><th>總用時</th></tr></thead>
+                <tbody>
+                    ${data.map((r, i) => `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.score}</td><td>${r.time}s</td></tr>`).join('')}
+                </tbody>
+            </table>
+            <hr style="border: 1px solid #333; margin-bottom: 30px;">
+            <h3 style="color: var(--neon-blue);">📋 個別學生答題紀錄 (最新完成排在最前)</h3>
+        `;
+
+        // 3. 個別學生答題紀錄表 (按時間倒序顯示)
+        let reversedData = [...data].sort((a,b) => new Date(b.date) - new Date(a.date));
+        
+        htmlContent += reversedData.map(record => `
+            <div class="admin-record">
+                <h3 style="color:white; margin-top:0;">${record.name} <span style="font-size:0.8em; color:var(--neon-green);">[分數: ${record.score} | 用時: ${record.time}s]</span></h3>
+                <div style="font-size:0.8em; color:#888; margin-bottom:10px;">完成時間：${record.date}</div>
+                
+                <table class="ans-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">關卡</th>
+                            <th>學生回答</th>
+                            <th>正確答案</th>
+                            <th>結果</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${record.details.map(d => `
+                            <tr>
+                                <td>${d.qTitle}</td>
+                                <td style="color: ${d.isCorrect ? 'white' : 'var(--alert-red)'};">${d.userAns}</td>
+                                <td>${d.correctAns}</td>
+                                <td>${d.isCorrect ? '<span class="correct-tag">✔ 對</span>' : '<span class="wrong-tag">✘ 錯</span>'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `).join('');
+
+        container.innerHTML = htmlContent;
+    }
+
+    function switchScreen(id) {
+        document.querySelectorAll('.container').forEach(c => c.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+</script>
+</body>
+</html>
