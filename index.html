@@ -24,6 +24,15 @@
         .fraction > span { display: block; padding: 0.1em; }
         .fraction span.fdn { border-top: 2px solid var(--neon-green); }
         #admin-btn { position: fixed; bottom: 10px; right: 10px; opacity: 0.3; color: white; background: none; border: none; cursor: pointer; }
+<body>
+    <h1>網絡防禦者</h1>
+    
+    <button onclick="startGame()">開始任務</button>
+    
+    <button onclick="showLeaderboard()" style="background-color: #f39c12;">🏆 查看排行榜</button>
+
+    <div id="leaderboard-modal" style="display:none; ...">
+        </div>
         
         /* Admin Panel 特殊樣式 */
         .admin-nav { display: flex; border-bottom: 2px solid var(--neon-blue); margin-bottom: 20px; }
