@@ -167,4 +167,182 @@
         }
     ];
 
-    let currentQ = 0, score =
+    let currentQ = 0, score = 0, timer, timeLeft, totalTime = 0, playerName = "";
+    let sessionResults = [];
+
+    window.onload = () => {
+        const s1 = document.getElementById("player-num-1"), s2 = document.getElementById("player-num-2");
+        for(let i=1; i<=37; i++) {
+            s1.add(new Option(i+"號", i)); s2.add(new Option(i+"號", i));
+        }
+    };
+
+    // 畫面切換函數
+    function switchScreen(id) {
+        document.querySelectorAll('.container').forEach(c => c.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        // 重置首頁選單
+        if(id === 'screen-welcome') {
+            document.getElementById("player-class").value = "";
+            document.getElementById("player-num-1").value = "";
+            document.getElementById("player-num-2").value = "";
+        }
+    }
+
+    function startGame() {
+        const cls = document.getElementById("player-class").value, n1 = document.getElementById("player-num-1").value, n2 = document.getElementById("player-num-2").value;
+        if(!cls || !n1) return alert("請選擇班別及學號！");
+        playerName = `${cls} (${n1}${n2 ? ','+n2 : ''})`;
+        score = 0; currentQ = 0; totalTime = 0; sessionResults = [];
+        document.getElementById("display-name").innerText = "特工: " + playerName;
+        switchScreen('screen-game');
+        nextQuestion();
+    }
+
+    function nextQuestion() {
+        if(currentQ >= questions.length) return endGame();
+        const q = questions[currentQ];
+        timeLeft = q.limit;
+        document.getElementById("level-title").innerText = q.title;
+        document.getElementById("question-text").innerHTML = q.html;
+        document.getElementById("progress").innerText = `${currentQ + 1} / ${questions.length}`;
+        const inputArea = document.getElementById("input-area");
+        if (q.type === "mc") {
+            inputArea.innerHTML = q.options.map(opt => `<button onclick="submitAnswer('${opt}')" style="width: 45%;">${opt}</button>`).join('');
+        } else {
+            inputArea.innerHTML = '<input type="number" id="ans" placeholder="輸入數值..."><button onclick="submitAnswer(document.getElementById(\'ans\').value)">傳送</button>';
+        }
+        if(timer) clearInterval(timer);
+        startTimer();
+    }
+
+    function startTimer() {
+        document.getElementById("timer").innerText = timeLeft;
+        document.getElementById("timer").className = "";
+        timer = setInterval(() => {
+            timeLeft--;
+            document.getElementById("timer").innerText = timeLeft;
+            if(timeLeft <= 3) document.getElementById("timer").className = "timer-red";
+            if(timeLeft <= 0) { clearInterval(timer); submitAnswer("超時未作答"); }
+        }, 1000);
+    }
+
+    function submitAnswer(ans) {
+        clearInterval(timer);
+        const q = questions[currentQ];
+        const isCorrect = (ans == q.correct);
+        if(isCorrect) score += q.score;
+        totalTime += (q.limit - (timeLeft < 0 ? 0 : timeLeft));
+
+        sessionResults.push({
+            qTitle: q.title,
+            userAns: ans,
+            correctAns: q.correct,
+            isCorrect: isCorrect
+        });
+
+        currentQ++;
+        nextQuestion();
+    }
+
+    async function endGame() {
+        switchScreen('screen-end');
+        document.getElementById("final-score").innerText = score;
+        document.getElementById("total-time").innerText = totalTime;
+        document.getElementById("end-status").innerText = score >= 300 ? "🎉 防禦成功！系統安全！" : "⚠️ 系統受損！請等待指揮官檢討。";
+        document.getElementById("end-status").style.color = score >= 300 ? "var(--neon-green)" : "var(--alert-red)";
+        
+        document.querySelector("#leaderboard tbody").innerHTML = "<tr><td colspan='4' style='text-align:center;'>正在與基地連線，上傳數據及獲取排行榜...</td></tr>";
+
+        const uploadData = {
+            date: new Date().toLocaleString(),
+            name: playerName,
+            score: score,
+            time: totalTime,
+            details: sessionResults
+        };
+
+        try {
+            await fetch(WEB_APP_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(uploadData)
+            });
+            fetchLeaderboard(); // 上傳完畢後更新遊戲結束畫面的排行榜
+        } catch (error) {
+            console.error("上傳失敗", error);
+            document.querySelector("#leaderboard tbody").innerHTML = "<tr><td colspan='4' style='text-align:center;color:red;'>連線失敗，請截圖給老師。</td></tr>";
+        }
+    }
+
+    // 獲取並顯示遊戲結束畫面的排行榜
+    async function fetchLeaderboard() {
+        try {
+            const response = await fetch(WEB_APP_URL);
+            const data = await response.json();
+            document.querySelector("#leaderboard tbody").innerHTML = data.slice(0, 10).map((r, i) => 
+                `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.score}</td><td>${r.time}s</td></tr>`
+            ).join('');
+        } catch (error) {
+            console.error("讀取排行榜失敗", error);
+            document.querySelector("#leaderboard tbody").innerHTML = "<tr><td colspan='4' style='text-align:center;color:red;'>無法讀取排行榜。</td></tr>";
+        }
+    }
+
+    // ========== 排行榜彈出視窗功能 (首頁用) ==========
+    async function showLeaderboard() {
+        document.getElementById('leaderboard-modal').style.display = 'block';
+        document.getElementById('loading-text').style.display = 'block';
+        document.getElementById('leaderboard-body').innerHTML = '';
+
+        try {
+            const response = await fetch(WEB_APP_URL);
+            const data = await response.json();
+            document.getElementById('loading-text').style.display = 'none';
+            
+            const top10 = data.slice(0, 10);
+            document.getElementById('leaderboard-body').innerHTML = top10.map((r, i) => 
+                `<tr>
+                    <td style="padding:10px; border: 1px solid #555;">${i+1}</td>
+                    <td style="border: 1px solid #555;">${r.name}</td>
+                    <td style="border: 1px solid #555;">${r.score} 分</td>
+                    <td style="border: 1px solid #555;">${r.time}s</td>
+                </tr>`
+            ).join('');
+
+            if(top10.length === 0) {
+                document.getElementById('leaderboard-body').innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; border: 1px solid #555;">暫無紀錄</td></tr>';
+            }
+        } catch (error) {
+            document.getElementById('loading-text').innerText = '讀取失敗，請檢查網絡連線。';
+        }
+    }
+
+    function closeLeaderboard() {
+        document.getElementById('leaderboard-modal').style.display = 'none';
+    }
+
+    // ========== 後台管理系統功能 ==========
+    function showAdmin() {
+        switchScreen('screen-admin');
+    }
+
+    function checkAdmin() {
+        // 教師預設密碼：1234 (可自行更改)
+        if(document.getElementById('admin-pwd').value === '1234') {
+            document.getElementById('admin-login').style.display = 'none';
+            document.getElementById('admin-data').style.display = 'block';
+        } else {
+            alert('密碼錯誤！存取被拒絕。');
+        }
+    }
+
+    function switchAdminTab(tab) {
+        document.getElementById('tab-exp').style.display = tab === 'exp' ? 'block' : 'none';
+        document.getElementById('tab-results').style.display = tab === 'results' ? 'block' : 'none';
+        document.getElementById('tab-btn-exp').classList.toggle('active-tab', tab === 'exp');
+        document.getElementById('tab-btn-results').classList.toggle('active-tab', tab === 'results');
+    }
+  </script>
+</body>
+</html>
