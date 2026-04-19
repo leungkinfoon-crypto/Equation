@@ -79,7 +79,7 @@
             <thead><tr><th>排名</th><th>特工</th><th>分數</th><th>總用時</th></tr></thead>
             <tbody></tbody>
         </table>
-        <button onclick="location.reload()" style="margin-top: 20px;">返回首頁</button>
+        <button onclick="switchScreen('screen-welcome')" style="margin-top: 20px;">返回首頁</button>
     </div>
 
     <div id="screen-admin" class="container" style="max-width: 900px;">
@@ -101,8 +101,8 @@
                 <button id="tab-btn-results" onclick="switchAdminTab('results')">📊 學生成績分析</button>
             </div>
 
-            <div id="tab-exp" style="display: block;"></div>
-            <div id="tab-results" style="display: none;"></div>
+            <div id="tab-exp" style="display: block;"><p>題目與詳解將顯示於此...</p></div>
+            <div id="tab-results" style="display: none;"><p>學生成績分析將顯示於此...</p></div>
         </div>
     </div>
 
@@ -122,14 +122,14 @@
                     </tr>
                 </thead>
                 <tbody id="leaderboard-body">
-                    </tbody>
+                </tbody>
             </table>
             <div id="loading-text" style="text-align:center; margin-top:20px; color: var(--neon-green);">📡 正在連接基地數據庫...</div>
         </div>
     </div>
 
   <script>
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw5erUUVqROD5isC91ESG10lvPGAGBBKBm3ZMFijoJnVwzT4ndrGdR2lwWPpzr8qJYQ/exec";
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzUC3XCqF0eNZNa8mm-RDcSWrNzrWAiihUT77MZPYfgEMuNE4JhaRqtMF5mTx9lcNXx/exec";
 
     const questions = [
         { 
@@ -167,108 +167,4 @@
         }
     ];
 
-    let currentQ = 0, score = 0, timer, timeLeft, totalTime = 0, playerName = "";
-    let sessionResults = [];
-    let isUploading = false;
-
-    window.onload = () => {
-        const s1 = document.getElementById("player-num-1"), s2 = document.getElementById("player-num-2");
-        for(let i=1; i<=37; i++) {
-            s1.add(new Option(i+"號", i)); s2.add(new Option(i+"號", i));
-        }
-    };
-
-    function startGame() {
-        const cls = document.getElementById("player-class").value, n1 = document.getElementById("player-num-1").value, n2 = document.getElementById("player-num-2").value;
-        if(!cls || !n1) return alert("請選擇班別及學號！");
-        playerName = `${cls} (${n1}${n2 ? ','+n2 : ''})`;
-        score = 0; currentQ = 0; totalTime = 0; sessionResults = [];
-        document.getElementById("display-name").innerText = "特工: " + playerName;
-        switchScreen('screen-game');
-        nextQuestion();
-    }
-
-    function nextQuestion() {
-        if(currentQ >= questions.length) return endGame();
-        const q = questions[currentQ];
-        timeLeft = q.limit;
-        document.getElementById("level-title").innerText = q.title;
-        document.getElementById("question-text").innerHTML = q.html;
-        document.getElementById("progress").innerText = `${currentQ + 1} / ${questions.length}`;
-        const inputArea = document.getElementById("input-area");
-        if (q.type === "mc") {
-            inputArea.innerHTML = q.options.map(opt => `<button onclick="submitAnswer('${opt}')" style="width: 45%;">${opt}</button>`).join('');
-        } else {
-            inputArea.innerHTML = '<input type="number" id="ans" placeholder="輸入數值..."><button onclick="submitAnswer(document.getElementById(\'ans\').value)">傳送</button>';
-        }
-        if(timer) clearInterval(timer);
-        startTimer();
-    }
-
-    function startTimer() {
-        document.getElementById("timer").innerText = timeLeft;
-        document.getElementById("timer").className = "";
-        timer = setInterval(() => {
-            timeLeft--;
-            document.getElementById("timer").innerText = timeLeft;
-            if(timeLeft <= 3) document.getElementById("timer").className = "timer-red";
-            if(timeLeft <= 0) { clearInterval(timer); submitAnswer("超時未作答"); }
-        }, 1000);
-    }
-
-    function submitAnswer(ans) {
-        clearInterval(timer);
-        const q = questions[currentQ];
-        const isCorrect = (ans == q.correct);
-        if(isCorrect) score += q.score;
-        totalTime += (q.limit - (timeLeft < 0 ? 0 : timeLeft));
-
-        sessionResults.push({
-            qTitle: q.title,
-            userAns: ans,
-            correctAns: q.correct,
-            isCorrect: isCorrect
-        });
-
-        currentQ++;
-        nextQuestion();
-    }
-
-    async function endGame() {
-        switchScreen('screen-end');
-        document.getElementById("final-score").innerText = score;
-        document.getElementById("total-time").innerText = totalTime;
-        document.getElementById("end-status").innerText = score >= 300 ? "🎉 防禦成功！系統安全！" : "⚠️ 系統受損！請等待指揮官檢討。";
-        document.getElementById("end-status").style.color = score >= 300 ? "var(--neon-green)" : "var(--alert-red)";
-        
-        document.querySelector("#leaderboard tbody").innerHTML = "<tr><td colspan='4' style='text-align:center;'>正在與基地連線，上傳數據及獲取排行榜...</td></tr>";
-
-        const uploadData = {
-            date: new Date().toLocaleString(),
-            name: playerName,
-            score: score,
-            time: totalTime,
-            details: sessionResults
-        };
-
-        try {
-            await fetch(WEB_APP_URL, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(uploadData)
-            });
-            fetchLeaderboard();
-        } catch (error) {
-            console.error("上傳失敗", error);
-            document.querySelector("#leaderboard tbody").innerHTML = "<tr><td colspan='4' style='text-align:center;color:red;'>連線失敗，請截圖給老師。</td></tr>";
-        }
-    }
-
-    async function fetchLeaderboard() {
-        try {
-            const response = await fetch(WEB_APP_URL);
-            const data = await response.json();
-            document.querySelector("#leaderboard tbody").innerHTML = data.slice(0, 10).map((r, i) => 
-                `<tr><td>${i+1}</td><td>${r.name}</td><td>${r.score}</td><td>${r.time}s</td></tr>`
-            ).join('');
-        } catch (
+    let currentQ = 0, score =
